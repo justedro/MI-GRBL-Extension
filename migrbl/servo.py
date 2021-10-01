@@ -26,19 +26,17 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 """
-import inkex, simplestyle, simplepath
-import cubicsuperpath, simpletransform, bezmisc
+import inkex
+from deprecated import simplestyle, simplepath, cubicsuperpath, simpletransform, bezmisc
 
 import os
 import math
-import bezmisc
 import re
 import copy
 import sys
 import time
 import cmath
 import numpy
-import codecs
 import random
 import gettext
 _ = gettext.gettext
