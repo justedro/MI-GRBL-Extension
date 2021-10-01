@@ -26,28 +26,31 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 """
-import inkex
-from deprecated import simplestyle, simplepath, cubicsuperpath, simpletransform, bezmisc
-
-import os
-import math
-import re
+import cmath
 import copy
+import gettext
+import math
+import os
+import random
+import re
 import sys
 import time
-import cmath
+
+import inkex
 import numpy
-import random
-import gettext
+
+from deprecated import simplestyle, cubicsuperpath, simpletransform, bezmisc
+
 _ = gettext.gettext
 
  
 ### Check if inkex has errormsg (0.46 version doesnot have one.) Could be removed later.
 if "errormsg" not in dir(inkex):
-    inkex.errormsg = lambda msg: sys.stderr.write((unicode(msg) + "\n").encode("UTF-8"))
+    inkex.errormsg = lambda msg: sys.stderr.write((msg + "\n").encode("UTF-8"))
 
 
-def bezierslopeatt(((bx0,by0),(bx1,by1),(bx2,by2),(bx3,by3)),t):
+def bezierslopeatt(tpl, t):
+    ((bx0,by0),(bx1,by1),(bx2,by2),(bx3,by3)) = tpl
     ax,ay,bx,by,cx,cy,x0,y0=bezmisc.bezierparameterize(((bx0,by0),(bx1,by1),(bx2,by2),(bx3,by3)))
     dx=3*ax*(t**2)+2*bx*t+cx
     dy=3*ay*(t**2)+2*by*t+cy
@@ -183,8 +186,11 @@ def bound_to_bound_distance(sp1,sp2,sp3,sp4) :
             max_dist = max(max_dist,max_)
             print_("bound_to_bound", min_dist, max_dist)
     return min_dist, max_dist
-    
-def csp_to_point_distance(csp, p, dist_bounds = [0,1e100], tolerance=.01) :
+
+
+def csp_to_point_distance(csp, p, dist_bounds=None, tolerance=.01) :
+    if dist_bounds is None:
+        dist_bounds = [0, 1e100]
     min_dist = [1e100,0,0,0]
     for j in range(len(csp)) :
         for i in range(1,len(csp[j])) :
@@ -205,7 +211,8 @@ def csp_seg_to_point_distance(sp1,sp2,p,sample_points = 5, tolerance = .01) :
     for k in range(sample_points) :
         t = float(k)/(sample_points-1)
         i = 0
-        while i==0 or abs(f)>0.000001 and i<20 : 
+        f = sys.float_info.max
+        while i == 0 or abs(f)>0.000001 and i<20:
             t2,t3 = t**2,t**3
             f = (ax*t3+bx*t2+cx*t+dx)*(3*ax*t2+2*bx*t+cx) + (ay*t3+by*t2+cy*t+dy)*(3*ay*t2+2*by*t+cy)
             df = (6*ax*t+2*bx)*(ax*t3+bx*t2+cx*t+dx) + (3*ax*t2+2*bx*t+cx)**2 + (6*ay*t+2*by)*(ay*t3+by*t2+cy*t+dy) + (3*ay*t2+2*by*t+cy)**2
@@ -604,7 +611,7 @@ def csplength(csp):
     total = 0
     lengths = []
     for sp in csp:
-        for i in xrange(1,len(sp)):
+        for i in range(1,len(sp)):
             l = cspseglength(sp[i-1],sp[i])
             lengths.append(l)
             total += l            
@@ -614,12 +621,12 @@ def csplength(csp):
 def csp_segments(csp):
     l, seg = 0, [0]
     for sp in csp:
-        for i in xrange(1,len(sp)):
+        for i in range(1,len(sp)):
             l += cspseglength(sp[i-1],sp[i])
             seg += [ l ] 
 
     if l>0 :
-        seg = [seg[i]/l for i in xrange(len(seg))]
+        seg = [seg[i]/l for i in range(len(seg))]
     return seg,l
 
 
@@ -630,13 +637,13 @@ def rebuild_csp (csp, segs, s=None):
     if len(s)>len(segs) : return None
     segs = segs[:]
     segs.sort()
-    for i in xrange(len(s)):
+    for i in range(len(s)):
         d = None
-        for j in xrange(len(segs)):
+        for j in range(len(segs)):
             d = min( [abs(s[i]-segs[j]),j], d) if d!=None else [abs(s[i]-segs[j]),j]
         del segs[d[1]]
-    for i in xrange(len(segs)):
-        for j in xrange(0,len(s)):
+    for i in range(len(segs)):
+        for j in range(0,len(s)):
             if segs[i]<s[j] : break
         if s[j]-s[j-1] != 0 :
             t = (segs[i] - s[j-1])/(s[j]-s[j-1])
@@ -680,9 +687,10 @@ def csp_line_intersection(l1,l2,sp1,sp2):
 
 
 def csp_split_by_two_points(sp1,sp2,t1,t2) :
-    if t1>t2 : t1, t2 = t2, t1
+    if t1 > t2:
+        t1, t2 = t2, t1
     if t1 == t2 : 
-        sp1,sp2,sp3 =  csp_split(sp1,sp2,t)
+        sp1,sp2,sp3 =  csp_split(sp1,sp2,t1)
         return [sp1,sp2,sp2,sp3]
     elif t1 <= 1e-10 and t2 >= 1.-1e-10 :
         return [sp1,sp1,sp2,sp2]
@@ -915,6 +923,19 @@ def line_to_line_distance_2(p1,p2,p3,p4):
             point_to_line_segment_distance_2(p4,p1,p2))
 
 
+def line_to_line_max_distance_2(p1,p2,p3,p4):
+    if line_line_intersect(p1,p2,p3,p4) : return 0
+    return max(
+        point_to_line_segment_distance_2(p1,p3,p4),
+        point_to_line_segment_distance_2(p2,p3,p4),
+        point_to_line_segment_distance_2(p3,p1,p2),
+        point_to_line_segment_distance_2(p4,p1,p2))
+
+
+def line_to_line_min_max_distance_2(p1,p2,p3,p4):
+    return line_to_line_distance_2(p1,p2,p3,p4), line_to_line_max_distance_2(p1,p2,p3,p4)
+
+
 def csp_seg_bound_to_csp_seg_bound_max_min_distance(sp1,sp2,sp3,sp4) :
     bez1 = csp_segment_to_bez(sp1,sp2)
     bez2 = csp_segment_to_bez(sp3,sp4) 
@@ -1107,8 +1128,8 @@ def csp_segment_convex_hull(sp1,sp2):
     if m1 and not (m2 and m3) : return [a,b,d]
     if not (m1 and m2) and m3 : return [c,a,d]
     if not (m1 and m3) and m2 : return [b,c,d]
-    
-    raise ValueError, "csp_segment_convex_hull happend something that shouldnot happen!"    
+
+    raise ValueError("csp_segment_convex_hull happend something that shouldnot happen!")
 
     
 ################################################################################
@@ -1132,7 +1153,9 @@ def bounds_intersect(a, b) :
     return not ( (a[0]>b[2]) or (b[0]>a[2]) or (a[1]>b[3]) or (b[1]>a[3]) )
 
 
-def tpoint((x1,y1),(x2,y2),t):
+def tpoint(tpl1,tpl2,t):
+    (x1,y1) = tpl1
+    (x2,y2) = tpl2
     return [x1+t*(x2-x1),y1+t*(y2-y1)]
 
 
@@ -1166,7 +1189,8 @@ def bez_normalized_slope(bez,t):
 ###    Some vector functions
 ################################################################################
     
-def normalize((x,y)) :
+def normalize(tpl) :
+    (x,y) = tpl
     l = math.sqrt(x**2+y**2)
     if l == 0 : return [0.,0.]
     else :         return [x/l, y/l]
@@ -1248,7 +1272,7 @@ def atan2(*arg):
         
         return (math.pi/2 - math.atan2(arg[0],arg[1]) ) % math.pi2
     else :
-        raise ValueError, "Bad argumets for atan! (%s)" % arg  
+        raise ValueError("Bad argumets for atan! (%s)" % arg)
 
 
 def draw_text(text,x,y,style = None, font_size = 20) :
@@ -1347,7 +1371,7 @@ def cubic_solver(a,b,c,d):
 def print_(*arg):
     f = open(options.log_filename,"a")
     for s in arg :
-        s = str(unicode(s).encode('unicode_escape'))+" "
+        s = str(str(s).encode('unicode_escape'))+" "
         f.write( s )
     f.write("\n")
     f.close()
@@ -1559,15 +1583,15 @@ def csp_offset(csp, r) :
     ############################################################################
     # Remove all small segments (segment length < 0.001)
 
-    for i in xrange(len(csp)) :
-        for j in xrange(len(csp[i])) :
+    for i in range(len(csp)) :
+        for j in range(len(csp[i])) :
             sp = csp[i][j]
             if (P(sp[1])-P(sp[0])).mag() < 0.001 :
                 csp[i][j][0] = sp[1]
             if (P(sp[2])-P(sp[0])).mag() < 0.001 :
                 csp[i][j][2] = sp[1]
-    for i in xrange(len(csp)) :
-        for j in xrange(1,len(csp[i])) :
+    for i in range(len(csp)) :
+        for j in range(1,len(csp[i])) :
             if cspseglength(csp[i][j-1], csp[i][j])<0.001 : 
                 csp[i] = csp[i][:j] + csp[i][j+1:]
         if cspseglength(csp[i][-1],csp[i][0])>0.001 : 
@@ -1587,11 +1611,11 @@ def csp_offset(csp, r) :
     # Offset
     ############################################################################
     # Create offsets for all segments in the path. And join them together inside each subpath.         
-    unclipped_offset = [[] for i in xrange(csp_len)]
-    offsets_original = [[] for i in xrange(csp_len)]
-    join_points = [[] for i in xrange(csp_len)]
-    intersection = [[] for i in xrange(csp_len)]
-    for i in xrange(csp_len) :
+    unclipped_offset = [[] for i in range(csp_len)]
+    offsets_original = [[] for i in range(csp_len)]
+    join_points = [[] for i in range(csp_len)]
+    intersection = [[] for i in range(csp_len)]
+    for i in range(csp_len) :
         subpath = csp[i]
         subpath_offset = []
         last_offset_len = 0
@@ -1641,14 +1665,14 @@ def csp_offset(csp, r) :
     small_tolerance = 0.01
     summ = 0
     summ1 = 0      
-    for subpath_i in xrange(csp_len) :
-        for subpath_j in xrange(subpath_i,csp_len) :
+    for subpath_i in range(csp_len) :
+        for subpath_j in range(subpath_i,csp_len) :
             subpath = unclipped_offset[subpath_i]
             subpath1 = unclipped_offset[subpath_j]
-            for i in xrange(1,len(subpath)) :
+            for i in range(1,len(subpath)) :
                 # If subpath_i==subpath_j we are looking for self intersections, so 
-                # we'll need search intersections only for xrange(i,len(subpath1))
-                for j in ( xrange(i,len(subpath1)) if subpath_i==subpath_j else xrange(len(subpath1))) :
+                # we'll need search intersections only for range(i,len(subpath1))
+                for j in ( range(i,len(subpath1)) if subpath_i==subpath_j else range(len(subpath1))) :
                     if subpath_i==subpath_j and j==i :
                         # Find self intersections of a segment
                         sp1,sp2,sp3 = csp_split(subpath[i-1],subpath[i],.5)
@@ -1686,7 +1710,7 @@ def csp_offset(csp, r) :
     # Split unclipped offset by intersection points into splitted_offset
     ########################################################################
     splitted_offset = []
-    for i in xrange(csp_len) :
+    for i in range(csp_len) :
         subpath = unclipped_offset[i]
         if len(intersection[i]) > 0 :
             parts = csp_subpath_split_by_points(subpath, intersection[i])
@@ -1829,11 +1853,11 @@ def biarc(sp1, sp2, z1, z2, depth=0):
     elif     csmall and a!=0:    beta = -b/a 
     elif not asmall:     
         discr = b*b-4*a*c
-        if discr < 0:    raise ValueError, (a,b,c,discr)
+        if discr < 0:    raise ValueError((a, b, c, discr))
         disq = discr**.5
         beta1 = (-b - disq) / 2 / a
         beta2 = (-b + disq) / 2 / a
-        if beta1*beta2 > 0 :    raise ValueError, (a,b,c,disq,beta1,beta2)
+        if beta1*beta2 > 0 :    raise ValueError((a, b, c, disq, beta1, beta2))
         beta = max(beta1, beta2)
     elif    asmall and bsmall:    
         return biarc_split(sp1, sp2, z1, z2, depth)
@@ -1880,6 +1904,7 @@ def biarc_curve_segment_length(seg):
 def biarc_curve_clip_at_l(curve, l, clip_type = "strict") :
     # get first subcurve and ceck it's length  
     subcurve, subcurve_l, moved = [], 0, False
+    res = []
     for seg in curve:
         if seg[1] == "move" and moved or seg[1] == "end" :    
             break
@@ -1890,6 +1915,7 @@ def biarc_curve_clip_at_l(curve, l, clip_type = "strict") :
 
     if subcurve_l < l and clip_type == "strict" : return []    
     lc = 0
+    subcurve_closed = False
     if (subcurve[-1][4][0]-subcurve[0][0][0])**2 + (subcurve[-1][4][1]-subcurve[0][0][1])**2 < 10**-7 : subcurve_closed = True
     i = 0
     reverse = False
@@ -1910,10 +1936,10 @@ def biarc_curve_clip_at_l(curve, l, clip_type = "strict") :
                     x,y = seg[0][0]-seg[2][0], seg[0][1]-seg[2][1]
                     a = seg[3]/ls*(l-lc)
                     x,y = x*math.cos(a) - y*math.sin(a),  x*math.sin(a) + y*math.cos(a)
-                    x,y = x+seg[2][0], y+seg[2][1]
-                    res += [[ seg[0], "arc",  seg[2], a, [x,y], [seg[5][0],seg[5][1]/ls*(l-lc)]  ]]
+                    x,y = x+float(seg[2][0]), y+float(seg[2][1])
+                    res += [[ seg[0], "arc",  seg[2], a, [x,y], [seg[5][0],float(seg[5][1])/ls*(l-lc)]  ]]
                 if seg[1] == "line" :
-                    res += [[ seg[0], "line",  0, 0, [(seg[4][0]-seg[0][0])/ls*(l-lc),(seg[4][1]-seg[0][1])/ls*(l-lc)], [seg[5][0],seg[5][1]/ls*(l-lc)]  ]]
+                    res += [[ seg[0], "line",  0, 0, [(seg[4][0]-seg[0][0])/ls*(l-lc),(seg[4][1]-seg[0][1])/ls*(l-lc)], [seg[5][0],float(seg[5][1])/ls*(l-lc)]  ]]
         i += 1 
         if i >= len(subcurve) and not subcurve_closed: 
             reverse = not reverse
@@ -2197,7 +2223,7 @@ class Polygon:
         
         while len(edges)>0 :
             poly = []
-            if loops > len_edges  : raise ValueError, "Hull error"
+            if loops > len_edges  : raise ValueError("Hull error")
             loops+=1
             # Find left most vertex.
             start = (1e100,1)
@@ -2208,7 +2234,7 @@ class Polygon:
             loops1 = 0
             while (last[1]!=start[0] or first_run) :     
                 first_run = False
-                if loops1 > len_edges  : raise ValueError, "Hull error"
+                if loops1 > len_edges  : raise ValueError("Hull error")
                 loops1 += 1
                 next = get_closes_edge_by_angle(edges[last[1]],last)
                 #draw_pointer(next[0]+next[1],"Green","line", comment=i, width= 1)
@@ -2261,7 +2287,7 @@ class Arangement_Genetic:
         # for sp2 in top_spieces sum(|sp1-sp2|)/top_count
         sim = 0
         for sp2 in top : 
-            sim += math.sqrt(species_distance2(sp1,sp2[1]))
+            sim += math.sqrt(self.species_distance2(sp1,sp2[1]))
         return sim/len(top)
         
     
@@ -2769,9 +2795,9 @@ class laser_gcode(inkex.Effect):
 
     def transform_csp(self, csp_, layer, reverse = False):
         csp = [  [ [csp_[i][j][0][:],csp_[i][j][1][:],csp_[i][j][2][:]]  for j in range(len(csp_[i])) ]   for i in range(len(csp_)) ]
-        for i in xrange(len(csp)):
-            for j in xrange(len(csp[i])): 
-                for k in xrange(len(csp[i][j])): 
+        for i in range(len(csp)):
+            for j in range(len(csp[i])):
+                for k in range(len(csp[i][j])):
                     csp[i][j][k] = self.transform(csp[i][j][k],layer, reverse)
         return csp
     
@@ -2973,7 +2999,7 @@ class laser_gcode(inkex.Effect):
             i=0        
             out=[]
             for p in points:
-                for j in xrange(i,len(points)):
+                for j in range(i,len(points)):
                     if p==points[j]: points[j]=[None,None]    
                 if p!=[None,None]: out+=[p]
             i+=1
@@ -2982,7 +3008,7 @@ class laser_gcode(inkex.Effect):
     
         def get_way_len(points):
             l=0
-            for i in xrange(1,len(points)):
+            for i in range(1,len(points)):
                 l+=math.sqrt((points[i][0]-points[i-1][0])**2 + (points[i][1]-points[i-1][1])**2)
             return l
 
@@ -3008,7 +3034,7 @@ class laser_gcode(inkex.Effect):
             for w in ways:
                 tpoints=points[:]
                 cw=[]
-                for j in xrange(0,len(points)):
+                for j in range(0,len(points)):
                     p=get_boundaries(get_boundaries(tpoints)[w[0]])[w[1]]
                     tpoints.remove(p[0])
                     cw+=p
