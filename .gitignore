@@ -2,3 +2,4 @@
 *.zip
 test
 /extensions/
+/test_resources/
